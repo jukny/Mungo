@@ -11,7 +11,7 @@ class GetCache:
         variables = []
         if handler:
             handler.code = 200
-            return handler, namedtuple('arguments', variables)()
+            return handler, namedtuple('arguments', variables)(), handler.template
         for i in [pos for pos, char in enumerate(key) if char == '/'][::-1]:
             handler = GetCache.__handlers.get(key[:i] or '/')
             if handler:

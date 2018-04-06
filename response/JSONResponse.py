@@ -1,16 +1,11 @@
-import jinja2 as j2
+from json import dumps
 
 
 class JSONResponse:
-    def __init__(self, request, context=None, code=200):
-        with open(f'C:/Projects/Server/{request.template}', 'r') as h:
-            self.json = h.read()
+    def __init__(self, request, json_dict, code=200):
+        self.json = dumps(json_dict)
         self.code = code
         self.type = 'application/json'
-        self.context = context or {}
 
     def __bytes__(self):
-        json = self.json
-        if self.context:
-            html = j2.Template(self.json).render(self.context)
-        return json.encode()
+        return self.json.encode()
