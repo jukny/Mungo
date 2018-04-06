@@ -9,10 +9,10 @@ def __split(context):
     return variables, root
 
 
-def get_handler(context):
+def get_handler(context, template=''):
     def wrapper(fn):
         wraps(fn)
         variables, root = __split(context)
-        GetCache.set(root, fn, variables)
+        GetCache.set(root, fn, variables, template)
         return fn
     return wrapper

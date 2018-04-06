@@ -23,8 +23,8 @@ class GetCache:
             arguments = namedtuple('arguments', handler.arguments)(*variables)
         else:
             handler = Handler(None, None, 404)
-        return handler, arguments
+        return handler, arguments, handler.template
 
     @staticmethod
-    def set(key, handler, variables):
-        GetCache.__handlers[key] = Handler(handler, variables)
+    def set(key, handler, variables, template):
+        GetCache.__handlers[key] = Handler(handler, variables, template)

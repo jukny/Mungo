@@ -6,20 +6,23 @@ from urllib.parse import parse_qs, urlparse
 class MungoSever(BaseHTTPRequestHandler):
 
     def __set_headers(self, response, message=''):
-        self.send_response(response.code, message=message)
+        self.send_response(response.code, message=message )
         self.send_header('Content-type', response.type)
         self.end_headers()
 
     def do_GET(self):
         path = urlparse(self.path).path
-        handler, arguments = GetCache.get(path)
+        handler, arguments, template = GetCache.get(path)
         query = {key:val[0] for key, val in parse_qs(urlparse(self.path).query).items()}
         if handler.code != 200:
             self.__set_headers(handler)
             self.wfile.write(f'404 - Page not found: {self.path}'.encode())
         else:
-            args = namedtuple('arguments', ['path', 'arguments', 'query'])(
-                self.path, arguments, namedtuple('query', query.keys())(**query)
+            args = namedtuple('arguments', ['path', 'arguments', 'query', 'template'])(
+                self.path,
+                arguments,
+                namedtuple('query', query.keys())(**query),
+                template
             )
             response = handler.operation(args)
             self.__set_headers(response)

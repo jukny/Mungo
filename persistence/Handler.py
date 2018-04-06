@@ -1,7 +1,8 @@
 class Handler:
-    def __init__(self, operation, arguments, code=0):
+    def __init__(self, operation, arguments, template, code=0):
         self.operation = operation
         self.arguments = arguments
+        self.template = template
         self.code = code
         self.type = 'text/html'
 
