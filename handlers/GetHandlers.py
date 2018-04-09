@@ -9,7 +9,7 @@ def __split(context):
     return variables, root
 
 
-def get_handler(context, template=''):
+def get_handler(context, template='', model=None):
     def wrapper(fn):
         wraps(fn)
         variables, root = __split(context)

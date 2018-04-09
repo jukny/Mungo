@@ -3,7 +3,7 @@ import jinja2 as j2
 class HTMLResponse:
 
     def __init__(self, request, context=None, code=200):
-        with open(f'C:/Projects/Server/app/templates/{request.template}', 'r') as h:
+        with open(f'C:/Projects/Server/application/templates/{request.template}', 'r') as h:
             self.html = h.read()
         self.code = code
         self.type = 'text/html'
@@ -13,4 +13,4 @@ class HTMLResponse:
         html = self.html
         if self.context:
             html = j2.Template(self.html).render(self.context)
-        return html.encode()
+        return j2.Template(self.html).render(self.context).encode()
