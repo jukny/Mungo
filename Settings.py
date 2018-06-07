@@ -1,1 +1,0 @@
-APPLICATION_HOME='C:/Projects/server/application'
