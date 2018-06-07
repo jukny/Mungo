@@ -3,6 +3,14 @@ from collections import namedtuple
 import sqlite3
 import re
 
+
+class Comparison:
+    lt = lambda x, y: x < y
+    gt = lambda x, y: x > y
+    le = lambda x, y: x <= y
+    ge = lambda x, y: x >= y
+
+
 class SQLSingleRow:
 
     def __init__(self, **kwargs):
@@ -39,11 +47,10 @@ class SQLRows:
 
     def __repr__(self):
         r = str([a for a in self.rows])
-        return f'<SQLRows: {r}>'
+        return f'<SQLList: {r}>'
 
     def filter(self, **kwargs):
         return SQLRows(*(r for r in self.rows if kwargs.items() <= r.all.items()))
-
 
 
 class ClassProperty(property):
@@ -55,16 +62,46 @@ class Model(ABC):
     @ClassProperty
     def objects(cls):
         try:
-            from application import Models
-            return namedtuple('DbOperations', ('get', 'filter', 'set', 'create'))(
+            #from application import Models
+            op_names = (
+                'get',
+                'filter',
+                'set',
+                'create',
+                'drop',
+                'truncate',
+            )
+            ops = (
                 cls.__get,
                 cls.__filter,
                 cls.__set,
-                cls.__create_table
+                cls.__create_table,
+                cls.__drop_table,
+                cls.__truncate,
             )
+            return namedtuple('DbOperations', op_names)(*ops)
         except ImportError:
             pass
 
+    @staticmethod
+    def __get_application_db():
+        try:
+            import application.settings
+            return application.settings.sqlite_db
+        except ImportError as e:
+            print(e)
+            exit(1)
+
+    @classmethod
+    def __get_primary(cls):
+        connection = sqlite3.connect(Model.__get_application_db())
+        cursor = connection.cursor()
+        result = cursor.execute(f'PRAGMA table_info({cls.__name__})')
+        pk = [c[1] for c in result if c[-1] == 1][0]
+        if pk == 'id':
+            return ['id']
+        else:
+            return []
     @classmethod
     def __get(cls, **kwargs):
         """
@@ -72,42 +109,38 @@ class Model(ABC):
         :param kwargs:
         :return SQLList:
         """
-        cols = ', '.join(sorted([c for c in dir(cls) if not c.startswith("_") and c != "objects"]))
-        cols += ', id'
-        statement = f"SELECT {cols} FROM {cls.__name__}"
-        keys = ' AND '.join([ f"{v[0]}='{v[1]}'" for v in kwargs.items()])
+        cols = sorted([c for c in dir(cls) if not c.startswith("_") and c != "objects"])
+        cols += cls.__get_primary()
+        statement = f"SELECT {', '.join(cols)} FROM {cls.__name__}"
+        keys = ' AND '.join([f"{v[0]}='{v[1]}'" for v in kwargs.items()])
         if keys:
             statement += f' WHERE {keys}'
-        connection = sqlite3.connect('C:/Projects/server/application/app.db')
+        connection = sqlite3.connect(Model.__get_application_db())
         cursor = connection.cursor()
         result = cursor.execute(statement)
         cols = sorted([k for k in cls.__dict__ if not k.startswith('_') and k != 'objects'])
-        cols.append('id')
-        return SQLRows(*[ SQLSingleRow(**dict(zip(cols, row))) for row in result ])
-
+        cols += cls.__get_primary()
+        return SQLRows(*[SQLSingleRow(**dict(zip(cols, row))) for row in result])
 
     @classmethod
     def __set(cls, **kwargs):
         """
         Set row in table
-        :param kwargs:
-        :return Boolean:
+        :param kwargs: Arguments using the column names
+        :return Boolean: Returns False if failed
         """
         statement = f"""INSERT INTO {cls.__name__} 
         ({', '.join([v[0] for v in kwargs.items()])}) 
         VALUES ({", ".join([f"'{v[1]}'" for v in kwargs.items()])})"""
-        connection = sqlite3.connect('C:/Projects/server/application/app.db')
+        connection = sqlite3.connect(Model.__get_application_db())
         cursor = connection.cursor()
         try:
             cursor.execute(statement)
             connection.commit()
-            return True
+            return namedtuple('status', ('status', 'reason'))(True, None)
         except sqlite3.Error as e:
             print(e)
-            return False
-
-
-
+            return namedtuple('status', ('status', 'reason'))(False, e)
 
     @classmethod
     def __filter(cls, **kwargs):
@@ -120,10 +153,10 @@ class Model(ABC):
         cols = ', '.join(sorted([c for c in dir(cls) if not c.startswith("_") and c != "objects"]))
         cols += ', id'
         statement = f"SELECT {cols} FROM {cls.__name__}"
-        keys = ' AND '.join([ f"{v[0]}='{v[1]}'" for v in kwargs.items()])
+        keys = ' AND '.join([f"{v[0]}='{v[1]}'" for v in kwargs.items()])
         if keys:
             statement += f' WHERE {keys}'
-        connection = sqlite3.connect('C:/Projects/server/application/app.db')
+        connection = sqlite3.connect(Model.__get_application_db())
         cursor = connection.cursor()
         result = cursor.execute(statement)
         cols = sorted([k for k in cls.__dict__ if not k.startswith('_') and k != 'objects'])
@@ -133,20 +166,31 @@ class Model(ABC):
     @classmethod
     def __create_table(cls):
         columns = [f'{c} {str(getattr(cls, c))}' for c in dir(cls) if not c.startswith('_') and c != 'objects']
-        if not list(filter(lambda b: re.compile(r'\b(ID)\b').search(b), columns)):
+        if not list(filter(lambda b: re.compile(r'\b(PRIMARY KEY)\b').search(b), columns)):
             columns.append('id INTEGER PRIMARY KEY AUTOINCREMENT')
-            #cls.id = 'id INTEGER PRIMARY KEY AUTOINCREMENT'
         statement = f'CREATE TABLE {cls.__name__} ({", ".join(columns)})'
         connection = sqlite3.connect('C:/Projects/server/application/app.db')
         cursor = connection.cursor()
         try:
-            print(statement)
             cursor.execute(statement)
+            return namedtuple('status', ('status', 'reason'))(True, None)
+        except sqlite3.Error as e:
+            return namedtuple('status', ('status', 'reason'))(True, e)
+    @classmethod
+    def __drop_table(cls):
+        table_name = cls.__name__
+        connection = sqlite3.connect(Model.__get_application_db())
+        cursor = connection.cursor()
+        try:
+            cursor.execute(f'DROP TABLE IF EXISTS {table_name}')
             return True
         except sqlite3.Error as e:
-            print(e)
             return False
 
+    @classmethod
+    def __truncate(cls):
+        cls.__drop_table()
+        cls.__create_table()
 
 class Field:
     TEXT = 'TEXT'
@@ -157,8 +201,8 @@ class Field:
     NULL = 'NULL'
     BLOB = 'BLOB'
 
-    def __init__(self, type, default, unique, primary_key, length):
-        self.type = type
+    def __init__(self, field_type, default, unique, primary_key, length):
+        self.type = field_type
         self.default = default
         self.length = length
         self.unique = unique
@@ -196,6 +240,29 @@ class IntegerField(Field):
     def __init__(self, default=None, unique=False, primary_key=False):
         super(IntegerField, self).__init__(
             Field.INTEGER,
+            f'DEFAULT {default}' if default else None,
+            'UNIQUE' if unique else None,
+            'PRIMARY KEY' if primary_key else None,
+            None  # No length
+        )
+
+
+class RealField(Field):
+
+    def __init__(self, default=None, unique=False, primary_key=False):
+        super(RealField, self).__init__(
+            Field.REAL,
+            f'DEFAULT {default}' if default else None,
+            'UNIQUE' if unique else None,
+            'PRIMARY KEY' if primary_key else None,
+            None  # No length
+        )
+
+
+class BlobField(Field):
+    def __init__(self, default=None, unique=False, primary_key=False):
+        super(BlobField, self).__init__(
+            Field.BLOB,
             f'DEFAULT {default}' if default else None,
             'UNIQUE' if unique else None,
             'PRIMARY KEY' if primary_key else None,

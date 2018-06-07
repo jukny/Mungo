@@ -9,10 +9,10 @@ def __split(context):
     return variables, root
 
 
-def get_handler(context, template='', model=None):
+def get_handler(context, template='', authenticate=False, login_url='', content_type='text/html', redirect=''):
     def wrapper(fn):
         wraps(fn)
         variables, root = __split(context)
-        GetCache.set(root, fn, variables, template)
+        GetCache.set(root, fn, variables, template, authenticate, login_url, content_type, redirect)
         return fn
     return wrapper
